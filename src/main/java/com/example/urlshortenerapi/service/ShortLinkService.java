@@ -10,7 +10,6 @@ import com.example.urlshortenerapi.repository.ShortLinkRepository;
 import com.example.urlshortenerapi.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
@@ -39,20 +38,19 @@ public class ShortLinkService {
         User user = userRepository.findUserByEmail(email).orElseThrow(() -> new UsernameNotFoundException("пользователь не найден"));
 
         for (int i = 0; i < maxAttempts; i++) {
-            try {
-                ShortLink link = ShortLink.builder()
-                        .shortCode(generateCode(characterCount))
-                        .originalLink(createShortLinkDto.getUrl())
-                        .createdAt(LocalDateTime.now())
-                        .user(user)
-                        .expiresAt(LocalDateTime.now().plusDays(lifespanInDays))
-                        .isActive(true)
-                        .build();
-                repository.save(link);
-                return startLink + link.getShortCode();
-            } catch (DataIntegrityViolationException e) {
-                log.warn("Collision or constraint violation on attempt {}: {}", i, e.getMessage());
-            }
+            ShortLink link = ShortLink.builder()
+                    .shortCode(generateCode(characterCount))
+                    .originalLink(createShortLinkDto.getUrl())
+                    .createdAt(LocalDateTime.now())
+                    .user(user)
+                    .expiresAt(LocalDateTime.now().plusDays(lifespanInDays))
+                    .isActive(true)
+                    .build();
+            if (repository.existsShortLinkByShortCode(link.getShortCode()))
+                continue;
+
+            repository.save(link);
+            return startLink + link.getShortCode();
         }
         throw new RuntimeException("Не удалось сгенерировать уникальный код");
     }
